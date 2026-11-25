@@ -2,8 +2,10 @@ package com.os4.rear
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Binder
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
@@ -30,7 +32,8 @@ class RearHooks : XposedModule() {
 
     /**
      * Every volume key press reaches AudioService.adjustSuggestedStreamVolume, even one it then
-     * ignores (nothing playing, front screen off); the rear card is told so it can show its ring.
+     * ignores (nothing playing, front screen off); the rear card is told so it can show its ring,
+     * and with the front screen off the press moves the music volume.
      */
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
         runCatching {
@@ -38,14 +41,22 @@ class RearHooks : XposedModule() {
             val ctx = audio.getDeclaredField("mContext").apply { isAccessible = true }
             audio.declaredMethods.filter { it.name == "adjustSuggestedStreamVolume" }.forEach { m ->
                 hook(m).intercept { chain ->
+                    val context = ctx.get(chain.thisObject) as Context
                     val now = SystemClock.uptimeMillis()
                     if (now - lastVolumeKey > 50) {   // one press runs through several overloads
                         lastVolumeKey = now
                         val id = Binder.clearCallingIdentity()
-                        runCatching { (ctx.get(chain.thisObject) as Context).sendBroadcast(Intent(VOLUME_KEY).setPackage(SUBSCREEN)) }
+                        runCatching { context.sendBroadcast(Intent(VOLUME_KEY).setPackage(SUBSCREEN)) }
                         Binder.restoreCallingIdentity(id)
                     }
-                    chain.proceed()
+                    // With the front screen off and nothing playing the system picks the ringer
+                    // and leaves it be; the rear card's keys should move the music instead.
+                    val args = chain.args.toTypedArray()
+                    if (args.getOrNull(1) == AudioManager.USE_DEFAULT_STREAM_TYPE &&
+                        context.getSystemService(PowerManager::class.java)?.isInteractive == false) {
+                        args[1] = AudioManager.STREAM_MUSIC
+                        chain.proceed(args)
+                    } else chain.proceed()
                 }
             }
         }.onFailure { log(Log.ERROR, TAG, "volume key hook failed", it) }
