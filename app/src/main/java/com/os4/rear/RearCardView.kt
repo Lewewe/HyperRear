@@ -23,14 +23,13 @@ import kotlin.math.max
 class RearCardView(context: Context) : View(context) {
     private val dens = resources.displayMetrics.density
     private val player = RearPlayer(context, dens) { invalidate() }
-    private val onMedia: () -> Unit = { player.sync(); backdrop(); volume.hold(!RearMedia.running); invalidate() }
+    private val onMedia: () -> Unit = { player.sync(); backdrop(); invalidate() }
     private val volume = VolumeRing(this)
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         RearMedia.addListener(onMedia)
         volume.attach()
-        volume.hold(!RearMedia.running)
         player.snap()
         backdrop()
     }

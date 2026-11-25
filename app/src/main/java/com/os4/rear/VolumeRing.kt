@@ -32,38 +32,23 @@ class VolumeRing(private val view: View) {
     private var reveal: ValueAnimator? = null
     private var slide: ValueAnimator? = null
 
-    private var held = false
-    private val hide = Runnable { if (!held) animateShown(0f, HIDE_MS) }
-
-    /**
-     * Kept out while nothing plays, to check the ring against the lens.
-     * shortcut: a check aid; drop it (and the call in RearCardView) once the fit is settled.
-     */
-    fun hold(on: Boolean) {
-        if (on == held) return
-        held = on
-        if (on) {
-            if (frac.isNaN() || shown == 0f) frac = current()
-            view.removeCallbacks(hide)
-            if (target != 1f) animateShown(1f, SHOW_MS)
-        } else view.postDelayed(hide, HOLD_MS)
-    }
+    private val hide = Runnable { animateShown(0f, HIDE_MS) }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            if (i.getIntExtra(EXTRA_STREAM, -1) == AudioManager.STREAM_MUSIC) changed()
+            if (i.action == RearHooks.VOLUME_KEY || i.getIntExtra(EXTRA_STREAM, -1) == AudioManager.STREAM_MUSIC) changed()
         }
     }
 
     fun attach() {
-        view.context.registerReceiver(receiver, IntentFilter(VOLUME_CHANGED), Context.RECEIVER_EXPORTED)
+        view.context.registerReceiver(receiver, IntentFilter(VOLUME_CHANGED).apply { addAction(RearHooks.VOLUME_KEY) }, Context.RECEIVER_EXPORTED)
     }
 
     fun detach() {
         runCatching { view.context.unregisterReceiver(receiver) }
         view.removeCallbacks(hide)
         reveal?.cancel(); slide?.cancel()
-        shown = 0f; target = 0f; held = false
+        shown = 0f; target = 0f
     }
 
     private fun current(): Float {
