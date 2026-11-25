@@ -300,7 +300,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val side = full * 66f / 334f
         val cx = margin + side / 2f
         val cy = margin + side / 2f
-        val radius = side * 0.08f
+        val radius = side * 12.4f / 66f  // the native cover: radius 12.4 of its 66
         stepFlip()
         val out = outgoing
         val cur = current
