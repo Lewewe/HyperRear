@@ -32,7 +32,22 @@ class VolumeRing(private val view: View) {
     private var reveal: ValueAnimator? = null
     private var slide: ValueAnimator? = null
 
-    private val hide = Runnable { animateShown(0f, HIDE_MS) }
+    private var held = false
+    private val hide = Runnable { if (!held) animateShown(0f, HIDE_MS) }
+
+    /**
+     * Kept out while nothing plays, to check the ring against the lens.
+     * shortcut: a check aid; drop it (and the call in RearCardView) once the fit is settled.
+     */
+    fun hold(on: Boolean) {
+        if (on == held) return
+        held = on
+        if (on) {
+            if (frac.isNaN() || shown == 0f) frac = current()
+            view.removeCallbacks(hide)
+            if (target != 1f) animateShown(1f, SHOW_MS)
+        } else view.postDelayed(hide, HOLD_MS)
+    }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -48,7 +63,7 @@ class VolumeRing(private val view: View) {
         runCatching { view.context.unregisterReceiver(receiver) }
         view.removeCallbacks(hide)
         reveal?.cancel(); slide?.cancel()
-        shown = 0f; target = 0f
+        shown = 0f; target = 0f; held = false
     }
 
     private fun current(): Float {
