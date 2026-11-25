@@ -49,12 +49,14 @@ class RearHooks : XposedModule() {
                         runCatching { context.sendBroadcast(Intent(VOLUME_KEY).setPackage(SUBSCREEN)) }
                         Binder.restoreCallingIdentity(id)
                     }
-                    // With the front screen off and nothing playing the system picks the ringer
-                    // and leaves it be; the rear card's keys should move the music instead.
+                    // Screen off, the music stream not playing: AudioService takes a press with
+                    // FLAG_SHOW_UI as "open the panel" while the panel is hidden, and the front
+                    // panel never shows, so no press would move the volume. Drop the flag there.
                     val args = chain.args.toTypedArray()
-                    if (args.getOrNull(1) == AudioManager.USE_DEFAULT_STREAM_TYPE &&
+                    val flags = args.getOrNull(2) as? Int
+                    if (flags != null && flags and AudioManager.FLAG_SHOW_UI != 0 &&
                         context.getSystemService(PowerManager::class.java)?.isInteractive == false) {
-                        args[1] = AudioManager.STREAM_MUSIC
+                        args[2] = flags and AudioManager.FLAG_SHOW_UI.inv()
                         chain.proceed(args)
                     } else chain.proceed()
                 }
