@@ -299,7 +299,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         // The native card's own cover size: 66 of its 334-wide design (179 px on q200's 904).
         val side = full * 66f / 334f
         val cx = margin + side / 2f
-        val cy = margin + side / 2f
+        val cy = h * COVER_TOP + side / 2f
         // A touch under the native 12.4/66 so wide and tall covers keep their corners.
         val radius = side * 0.15f
         stepFlip()
@@ -649,6 +649,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val SKIP_SPREAD = 0.36f
         /** The rear layout, as shares of the card's height. */
         const val MARGIN = 0.075f
+        const val COVER_TOP = 0.14f   // the cover and titles sit a little lower than the side margin
         const val BAR_Y = 0.66f
         const val CONTROLS_Y = 0.85f
     }
