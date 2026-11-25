@@ -581,7 +581,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
 
     /** Play/pause in the middle, previous/next [SKIP_SPREAD] of the bar's width to either side. */
     private fun drawControls(c: Canvas, left: Float, width: Float, y: Float, h: Float) {
-        val size = h * 0.13f
+        val size = h * 0.15f
         for (i in 0..2) {
             val cx = left + width * (0.5f + (i - 1) * SKIP_SPREAD)
             buttons[i].set(cx - size, y - size, cx + size, y + size)
