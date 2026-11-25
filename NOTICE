@@ -1,0 +1,12 @@
+HyperRear
+Copyright (C) 2026 Lewewe
+
+Licensed under the GNU Affero General Public License, version 3. See LICENSE.
+
+HyperRear is an extension of HyperMusicCover-Enhanced
+(https://github.com/Lewewe/HyperMusicCover-Enhanced), itself a fork of
+HyperMusicCover by zyl6932 (https://github.com/zyl6932/HyperMusicCover), both
+AGPL-3.0.
+
+HyperOS's media icons and seek bar shader are read from the phone's own System UI
+at run time and are not distributed with HyperRear.
