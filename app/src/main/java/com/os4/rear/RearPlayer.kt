@@ -300,7 +300,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val side = full * 66f / 334f
         val cx = margin + side / 2f
         val cy = margin + side / 2f
-        val radius = side * 12.4f / 66f  // the native cover: radius 12.4 of its 66
+        // A touch under the native 12.4/66 so wide and tall covers keep their corners.
+        val radius = side * 0.15f
         stepFlip()
         val out = outgoing
         val cur = current
@@ -580,7 +581,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
 
     /** Play/pause in the middle, previous/next [SKIP_SPREAD] of the bar's width to either side. */
     private fun drawControls(c: Canvas, left: Float, width: Float, y: Float, h: Float) {
-        val size = h * 0.11f
+        val size = h * 0.13f
         for (i in 0..2) {
             val cx = left + width * (0.5f + (i - 1) * SKIP_SPREAD)
             buttons[i].set(cx - size, y - size, cx + size, y + size)
