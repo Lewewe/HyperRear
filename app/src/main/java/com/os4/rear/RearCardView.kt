@@ -24,16 +24,19 @@ class RearCardView(context: Context) : View(context) {
     private val dens = resources.displayMetrics.density
     private val player = RearPlayer(context, dens) { invalidate() }
     private val onMedia: () -> Unit = { player.sync(); backdrop(); invalidate() }
+    private val volume = VolumeRing(this)
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         RearMedia.addListener(onMedia)
+        volume.attach()
         player.snap()
         backdrop()
     }
 
     override fun onDetachedFromWindow() {
         RearMedia.removeListener(onMedia)
+        volume.detach()
         removeCallbacks(tick)
         super.onDetachedFromWindow()
     }
@@ -115,6 +118,7 @@ class RearCardView(context: Context) : View(context) {
         c.translate(left, 0f)
         player.draw(c, w - left, h, w)
         c.restore()
+        volume.draw(c, w, h)
         // The bar and its times move on their own while playing.
         removeCallbacks(tick)
         if (RearMedia.running) postDelayed(tick, TICK_MS)
