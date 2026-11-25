@@ -1,6 +1,7 @@
 <p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
 
 <div align="center">
+  <img src="docs/images/app-icon.png" alt="HyperRear 应用图标" width="128" height="128" />
   <h1>HyperRear</h1>
   <p><strong>为小米 17 Pro 系列背屏带来更好的音乐卡片。</strong></p>
   <p>

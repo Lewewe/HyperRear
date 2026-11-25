@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- No screen of its own: an LSPosed module inside the rear screen's launcher. -->
-    <application android:label="HyperRear" android:hasCode="true" />
+    <application android:label="HyperRear" android:icon="@drawable/ic_hyperrear" android:hasCode="true" />
 </manifest>
