@@ -110,13 +110,13 @@ class VolumeRing(private val view: View) {
     companion object {
         private const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
         private const val EXTRA_STREAM = "android.media.EXTRA_VOLUME_STREAM_TYPE"
-        // subscreencenter's guide_camera_animation: the top lens is a 64.75-radius circle at
-        // (81.3, 81.3) of the 468.4 x 300.3 screen it draws.
-        const val LENS_X = 81.27f / 468.37f
-        const val LENS_Y = 81.30f / 300.31f
-        const val LENS_R = 64.75f / 300.31f
+        // The top lens on the rear screen, measured off the rear wallpaper picker's preview
+        // (the card 1043 px wide there): centre (147.8, 146.5), radius 128.7 of 904 x 572.
+        const val LENS_X = 147.8f / 904f
+        const val LENS_Y = 146.5f / 572f
+        const val LENS_R = 128.7f / 572f
         private const val STROKE_DP = 3f
-        private const val GAP_DP = 4f
+        private const val GAP_DP = 0f
         private const val BLUR_DP = 10f
         private const val SHOW_MS = 320L
         private const val HIDE_MS = 420L
