@@ -113,7 +113,7 @@ class RearCardView(context: Context) : View(context) {
         val left = cameraLeft()
         c.save()
         c.translate(left, 0f)
-        player.draw(c, w - left, h)
+        player.draw(c, w - left, h, w)
         c.restore()
         // The bar and its times move on their own while playing.
         removeCallbacks(tick)
