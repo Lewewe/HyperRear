@@ -1,17 +1,11 @@
 package com.os4.rear
 
 import android.content.Context
-import android.content.Intent
-import android.media.AudioManager
-import android.os.Binder
 import android.os.Bundle
-import android.os.PowerManager
-import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
-import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 
 /**
  * HyperRear inside com.xiaomi.subscreencenter, the rear screen's launcher.
@@ -28,41 +22,6 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
  */
 class RearHooks : XposedModule() {
     @Volatile private var topMediaPkg = ""
-    @Volatile private var lastVolumeKey = 0L
-
-    /**
-     * Every volume key press reaches AudioService.adjustSuggestedStreamVolume, even one it then
-     * ignores (nothing playing, front screen off); the rear card is told so it can show its ring,
-     * and with the front screen off the press moves the music volume.
-     */
-    override fun onSystemServerStarting(param: SystemServerStartingParam) {
-        runCatching {
-            val audio = param.classLoader.loadClass("com.android.server.audio.AudioService")
-            val ctx = audio.getDeclaredField("mContext").apply { isAccessible = true }
-            audio.declaredMethods.filter { it.name == "adjustSuggestedStreamVolume" }.forEach { m ->
-                hook(m).intercept { chain ->
-                    val context = ctx.get(chain.thisObject) as Context
-                    val now = SystemClock.uptimeMillis()
-                    if (now - lastVolumeKey > 50) {   // one press runs through several overloads
-                        lastVolumeKey = now
-                        val id = Binder.clearCallingIdentity()
-                        runCatching { context.sendBroadcast(Intent(VOLUME_KEY).setPackage(SUBSCREEN)) }
-                        Binder.restoreCallingIdentity(id)
-                    }
-                    // Screen off, the music stream not playing: AudioService takes a press with
-                    // FLAG_SHOW_UI as "open the panel" while the panel is hidden, and the front
-                    // panel never shows, so no press would move the volume. Drop the flag there.
-                    val args = chain.args.toTypedArray()
-                    val flags = args.getOrNull(2) as? Int
-                    if (flags != null && flags and AudioManager.FLAG_SHOW_UI != 0 &&
-                        context.getSystemService(PowerManager::class.java)?.isInteractive == false) {
-                        args[2] = flags and AudioManager.FLAG_SHOW_UI.inv()
-                        chain.proceed(args)
-                    } else chain.proceed()
-                }
-            }
-        }.onFailure { log(Log.ERROR, TAG, "volume key hook failed", it) }
-    }
 
     override fun onPackageReady(param: PackageReadyParam) {
         if (param.packageName != SUBSCREEN || !param.isFirstPackage) return
@@ -118,6 +77,5 @@ class RearHooks : XposedModule() {
         const val TAG = "HyperRear"
         const val SUBSCREEN = "com.xiaomi.subscreencenter"
         const val MUSIC_CARD = "unified.music"
-        const val VOLUME_KEY = "com.os4.rear.VOLUME_KEY"
     }
 }

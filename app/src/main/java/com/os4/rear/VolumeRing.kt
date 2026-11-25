@@ -36,12 +36,12 @@ class VolumeRing(private val view: View) {
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            if (i.action == RearHooks.VOLUME_KEY || i.getIntExtra(EXTRA_STREAM, -1) == AudioManager.STREAM_MUSIC) changed()
+            if (i.getIntExtra(EXTRA_STREAM, -1) == AudioManager.STREAM_MUSIC) changed()
         }
     }
 
     fun attach() {
-        view.context.registerReceiver(receiver, IntentFilter(VOLUME_CHANGED).apply { addAction(RearHooks.VOLUME_KEY) }, Context.RECEIVER_EXPORTED)
+        view.context.registerReceiver(receiver, IntentFilter(VOLUME_CHANGED), Context.RECEIVER_EXPORTED)
     }
 
     fun detach() {
