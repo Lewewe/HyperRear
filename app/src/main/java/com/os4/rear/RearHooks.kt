@@ -40,7 +40,7 @@ class RearHooks : XposedModule() {
             if (card?.getString("package_name") != MUSIC_CARD) return@intercept native
             val context = chain.getArg(0) as Context
             RearMedia.update(context, card.getBundle("media_data"))
-            log(Log.INFO, TAG, "music card swapped for ${RearMedia.key}, art=${RearMedia.art?.width}, " +
+            log(Log.INFO, TAG, "music card swapped for ${RearMedia.key}, art=${RearMedia.art?.width}x${RearMedia.art?.height}, " +
                 "shown=${RearMedia.shown}, running=${RearMedia.running}, dur=${RearMedia.duration}")
             // shortcut: the MAML view is still built and loaded off-screen (the card keeps sending
             // it AOD/edit commands); stop building it when RearCardView grows its own AOD.

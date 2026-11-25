@@ -82,7 +82,24 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         var madeFor: Bitmap? = null
         /** Records the art for HMC-E's skip blur, kept inside the artwork. */
         val node = android.graphics.RenderNode("cover")
+        /** HMC-E's CoverCardStyle.aspect: the art's own width over height, held to 1/2..2. */
+        val aspect get() = if (bitmap.width > 0 && bitmap.height > 0)
+            (bitmap.width.toFloat() / bitmap.height).coerceIn(1f / MAX_ASPECT, MAX_ASPECT) else 1f
     }
+
+    /**
+     * HMC-E's shownAspect: the card takes the current art's shape, eased from the previous one's
+     * over the change (the flip's hold, or the crossfade), so a song then a video's cover changes
+     * shape as it turns over rather than jumping.
+     */
+    private fun shownAspect(): Float {
+        val to = current?.aspect ?: 1f
+        val from = outgoing?.aspect ?: return to
+        val t = ((SystemClock.uptimeMillis() - changedAt) / changeFadeMs.toFloat()).coerceIn(0f, 1f)
+        if (t < 1f) invalidate()
+        return from + (to - from) * (1f - (1f - t) * (1f - t) * (1f - t))
+    }
+    private var changeFadeMs = TRACK_FADE_MS
 
     private var current: Cover? = null
     private var outgoing: Cover? = null
@@ -255,6 +272,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             val recent = SystemClock.uptimeMillis() - RearMedia.lastSkipAt < 3000
             startFlip(prev, if (recent) RearMedia.lastSkip else 1)
         }
+        changeFadeMs = if (prev != null && next != null) FLIP_HOLD_MS else TRACK_FADE_MS
         outgoing = current
         current = next
         changedAt = SystemClock.uptimeMillis()
@@ -314,12 +332,14 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val fm = flipMatrix(cx, cy)
         if (fm != null) { cc.save(); cc.concat(fm) }
         val face = flipFrom ?: cur
+        val aspect = shownAspect()
         if (flipFrom == null && out != null && cur != null && !flipping()) {
             val t = ((SystemClock.uptimeMillis() - changedAt) / TRACK_FADE_MS.toFloat()).coerceIn(0f, 1f)
-            cover(cc, out, cx, cy, side, radius, base, 1f)
-            cover(cc, cur, cx, cy, side, radius, base, 1f - (1f - t) * (1f - t) * (1f - t))
+            cover(cc, out, cx, cy, side, radius, base, 1f, aspect)
+            cover(cc, cur, cx, cy, side, radius, base, 1f - (1f - t) * (1f - t) * (1f - t), aspect)
             if (t < 1f) invalidate()
-        } else if (face != null) cover(cc, face, cx, cy, side, radius, base, if (out == null && flipFrom == null) inT else 1f)
+        } else if (face != null) cover(cc, face, cx, cy, side, radius, base,
+            if (out == null && flipFrom == null) inT else 1f, aspect)
         if (fm != null) cc.restore()
     }
 
@@ -337,7 +357,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         Color.HSVToColor(hsv)
     }.getOrDefault(Color.BLACK)
 
-    private fun cover(c: Canvas, cv: Cover, cx: Float, cy: Float, side: Float, radius: Float, scale: Float, alpha: Float) {
+    private fun cover(c: Canvas, cv: Cover, cx: Float, cy: Float, side: Float, radius: Float, scale: Float,
+                      alpha: Float, aspect: Float) {
         if (alpha <= 0f) return
         val b = cv.bitmap
         if (cv.madeFor !== b) {
@@ -346,7 +367,10 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             cv.tint = shadowTint(b)
         }
         val s = side * scale
-        rect.set(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2)
+        // HMC-E's cardBox: the art's shape fitted inside the square, landscape full width, portrait full height.
+        val w = if (aspect >= 1f) s else s * aspect
+        val h = if (aspect >= 1f) s / aspect else s
+        rect.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
         // The shadow sinks with the cover and takes the artwork's own colour, deepened.
         val depth = ((scale - CARD_PAUSED) / (1f - CARD_PAUSED)).coerceIn(0f, 1.2f)
         val tint = cv.tint
@@ -357,10 +381,10 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         c.drawRoundRect(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset,
             radius * scale, radius * scale, shadow)
         val shader = cv.shader!!
-        val k = max(s / b.width, s / b.height)
+        val k = max(w / b.width, h / b.height)
         m.reset()
         m.postScale(k, k)
-        m.postTranslate(rect.left + (s - b.width * k) / 2f, rect.top + (s - b.height * k) / 2f)
+        m.postTranslate(rect.left + (w - b.width * k) / 2f, rect.top + (h - b.height * k) / 2f)
         shader.setLocalMatrix(m)
         artPaint.shader = shader
         artPaint.alpha = (255 * alpha).toInt()
@@ -611,6 +635,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         /** HMC-E's CoverCardLayer: the old art held this long at most, and the track crossfade. */
         const val FLIP_HOLD_MS = 600L
         const val TRACK_FADE_MS = 180L
+        /** HMC-E's CoverCardStyle.MAX_ASPECT: longer art is cropped to 2:1 (or 1:2). */
+        const val MAX_ASPECT = 2f
         const val FLIP_DAMPING = 0.72f
         const val FLIP_RESPONSE = 0.5f
         const val BAR_GAIN = 1.45f
