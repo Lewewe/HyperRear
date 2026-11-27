@@ -366,8 +366,14 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val barAlpha = if (cur != null || out != null) 1f else 0f
         // With the progress ring on, opening the lyric fades and blurs the bar out, then the ring
         // comes out of the lower camera; closing it runs the other way.
-        val barShown = if (progressRing) 1f - (lt * 2f).coerceIn(0f, 1f) else 1f
-        ringShown = if (progressRing) (lt * 2f - 1f).coerceIn(0f, 1f) else 0f
+        val barShown: Float
+        if (!progressRing) { barShown = 1f; ringShown = 0f } else if (ringUp) {
+            barShown = 1f - ringEase.getInterpolation(ringT.coerceIn(0f, 1f))
+            ringShown = ringEase.getInterpolation((ringT - 1f).coerceIn(0f, 1f))
+        } else {
+            ringShown = 1f - ringEase.getInterpolation((2f - ringT).coerceIn(0f, 1f))
+            barShown = ringEase.getInterpolation((1f - ringT).coerceIn(0f, 1f))
+        }
         if (barShown >= 1f || !c.isHardwareAccelerated) drawProgress(c, barLeft, barW, h * BAR_Y, h, barAlpha * barShown)
         else if (barShown <= 0f) bar.setEmpty()
         else {
@@ -590,6 +596,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
     private fun toggleLyrics() {
         if (!lyricsOn && !lyricsWanted) return
         lyricsOn = !lyricsOn
+        moveRing(lyricsOn)
         lyricsAnim?.cancel()
         lyricsAnim = ValueAnimator.ofFloat(lyricsT, if (lyricsOn) 1f else 0f).apply {
             duration = 380L
@@ -683,6 +690,24 @@ class RearPlayer(private val context: android.content.Context, private val dens:
     /** How far out of the lower camera the progress ring is, for the card to draw. */
     var ringShown = 0f
         private set
+    /** 0 the bar, 1 neither, 2 the ring: one goes back in before the other comes out. */
+    private var ringT = 0f
+    private var ringUp = true
+    private var ringAnim: ValueAnimator? = null
+    private val ringEase = android.view.animation.DecelerateInterpolator(1.5f)
+
+    /** As the volume ring: out over [RING_OUT_MS], back in over [RING_IN_MS], each eased the same way. */
+    private fun moveRing(up: Boolean) {
+        ringUp = up
+        val to = if (up) 2f else 0f
+        ringAnim?.cancel()
+        ringAnim = ValueAnimator.ofFloat(ringT, to).apply {
+            duration = (kotlin.math.abs(to - ringT) / 2f * (RING_IN_MS + RING_OUT_MS)).toLong()
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { ringT = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
     private val barNode = android.graphics.RenderNode("bar")
 
     /** Where the track is, for the ring: the bar's own place when it has one. */
@@ -881,6 +906,9 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val BAR_LIFT = 0.45f
         /** HMC-E's lyric size scaled down for the rear's small panel. */
         const val LYRICS_SCALE = 0.45f
+        /** The volume ring's own timings, for the bar and the progress ring trading places. */
+        const val RING_OUT_MS = 320L
+        const val RING_IN_MS = 420L
         /** The lyric's bottom fade, of the height. */
         const val LYRICS_FADE = 0.1f
         /** Opening the lyric: how far the cover row sinks into the middle and the lyric grows out of it. */
