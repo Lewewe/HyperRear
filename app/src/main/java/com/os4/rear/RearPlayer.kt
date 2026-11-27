@@ -314,6 +314,11 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val box = h * VIS_W
         val layer = if (lt > 0f) c.saveLayerAlpha(0f, 0f, w, h * BAR_Y - h * 0.04f, (255 * (1f - lt)).toInt()) else -1
         if (lt < 1f) {
+            // Opening the lyric, the cover row shrinks back and drifts up as it fades.
+            c.save()
+            c.translate(0f, -h * LYRICS_DRIFT * lt)
+            val k = 1f - LYRICS_SHRINK * lt
+            c.scale(k, k, margin, cy)
             drawCover(c, side, radius, scale, out, cur, inT, cx, cy)
             val textLeft = margin + side + h * 0.055f
             val textW = w - textLeft - margin - (if (Spectrum.connected || lyricsBtn > 0f) box * 1.3f else 0f)
@@ -321,7 +326,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             val outT = (swap / 0.5f).coerceIn(0f, 1f)
             drawText(c, out, textLeft, textW, titleBase, h, 1f - outT, -outT)
             drawText(c, cur, textLeft, textW, titleBase, h, inT, 1f - inT)
-            drawClock(c, margin, h * COVER_TOP - h * CLOCK_GAP)
+            c.restore()
         }
         if (layer >= 0) c.restoreToCount(layer)
         // The bars and the lyrics button keep their spot at the title row's right end.
@@ -330,8 +335,12 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         drawLyricsButton(c, sideX, cy + h * 0.065f, box * LYRICS_SIDE)
         if (lt > 0f && lyricsWanted) {
             flow.sizeScale = LYRICS_SCALE
+            // It rises into place as the cover row leaves, and sinks away as it comes back.
+            c.save()
+            c.translate(0f, h * LYRICS_RISE * (1f - lt))
             // From the panel's top edge, so the rows under the sung line stay above the bar.
             if (flow.draw(c, margin, 0f, w - margin - box * 1.4f, h * BAR_Y - h * 0.05f, lt)) invalidate()
+            c.restore()
         }
 
         val barLeft = margin
@@ -547,19 +556,22 @@ class RearPlayer(private val context: android.content.Context, private val dens:
     }
     private var clockOn = false
 
-    /** The panel's clock moves here: its text size and face, in white. */
+    /** The panel's clock is drawn here instead: its text size and face, in white. */
     fun clockLook(native: Paint) {
         clockPaint.textSize = native.textSize
         clockPaint.typeface = native.typeface
         clockOn = true
     }
 
-    /** The time as the panel's TimeView writes it, its baseline at [base]. */
-    private fun drawClock(c: Canvas, left: Float, base: Float) {
-        if (!clockOn) return
+    /** The time as the panel's TimeView writes it, centred on [cx], [cy]. */
+    fun drawClock(c: Canvas, cx: Float, cy: Float, alpha: Float) {
+        if (!clockOn || alpha <= 0f) return
         val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm"
+        clockPaint.textAlign = Paint.Align.CENTER
+        clockPaint.alpha = (255 * alpha).toInt()
+        val fm = clockPaint.fontMetrics
         c.drawText(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(pattern)),
-            left, base, clockPaint)
+            cx, cy - (fm.ascent + fm.descent) / 2f, clockPaint)
     }
 
     // ------------------------------------------------------------------ progress
@@ -782,8 +794,6 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val MARGIN = 0.075f
         // The cover and titles sit as far above the bar as the controls sit below it (73 px on q200).
         const val COVER_TOP = 0.208f
-        /** The clock's baseline this far above the cover. */
-        const val CLOCK_GAP = 0.045f
         const val BAR_Y = 0.66f
         const val CONTROLS_Y = 0.85f
         /** The visualizer slot (share of the height), and the lyrics button against it. */
@@ -793,5 +803,9 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val BAR_LIFT = 0.45f
         /** HMC-E's lyric size scaled down for the rear's small panel. */
         const val LYRICS_SCALE = 0.45f
+        /** Opening the lyric: the cover row's shrink and upward drift, the lyric's rise (of the height). */
+        const val LYRICS_SHRINK = 0.08f
+        const val LYRICS_DRIFT = 0.04f
+        const val LYRICS_RISE = 0.08f
     }
 }
