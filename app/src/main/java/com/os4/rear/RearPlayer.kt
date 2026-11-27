@@ -376,7 +376,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             barShown = ringEase.getInterpolation((1f - ringT).coerceIn(0f, 1f))
         }
         if (barShown >= 1f || !c.isHardwareAccelerated) drawProgress(c, barLeft, barW, h * BAR_Y, h, barAlpha * barShown)
-        else if (barShown <= 0f) bar.setEmpty()
+        // Hidden, the bar stops following the track: the ring reads it live (a restart to 0 included).
+        else if (barShown <= 0f) { bar.setEmpty(); barF = Float.NaN }
         else {
             val blur = LensRing.BLUR_DP * dens * (1f - barShown)
             barNode.setPosition(0, 0, w.toInt(), h.toInt())
