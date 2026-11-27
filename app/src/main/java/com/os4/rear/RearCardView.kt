@@ -20,7 +20,11 @@ import kotlin.math.max
  * The rear music card: a backdrop (the artwork blurred, saturated and dimmed,
  * crossfaded on a new track) under [RearPlayer], which draws right of the camera island.
  */
-class RearCardView(context: Context) : View(context) {
+class RearCardView(
+    context: Context,
+    /** Tells the panel this touch is the card's, so a double tap on a control does not sleep the screen. */
+    private val interceptDoubleClick: () -> Unit = {},
+) : View(context) {
     private val dens = resources.displayMetrics.density
     private val player = RearPlayer(context, dens) { invalidate() }
     private val onMedia: () -> Unit = { player.sync(); backdrop(); invalidate() }
@@ -207,9 +211,9 @@ class RearCardView(context: Context) : View(context) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 down = player.buttonAt(x, e.y)
-                if (down >= 0) { player.press(down); parent?.requestDisallowInterceptTouchEvent(true); return true }
+                if (down >= 0) { player.press(down); interceptDoubleClick(); parent?.requestDisallowInterceptTouchEvent(true); return true }
                 scrubbing = player.scrubStart(x, e.y)
-                if (scrubbing) parent?.requestDisallowInterceptTouchEvent(true)
+                if (scrubbing) { interceptDoubleClick(); parent?.requestDisallowInterceptTouchEvent(true) }
                 return scrubbing
             }
             MotionEvent.ACTION_MOVE -> if (scrubbing) player.scrubMove(x)

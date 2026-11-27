@@ -34,6 +34,10 @@ class RearHooks : XposedModule() {
         // The card's Bundle: the only Bundle field of the cards' base class.
         val bundleField = cl.loadClass("q2.v").declaredFields.single { it.type == Bundle::class.java }
             .apply { isAccessible = true }
+        // The card's extern-command handler: the native MAML card sends it "interceptDoubleClick"
+        // from its buttons, which keeps the panel's double tap from sleeping the screen for that touch.
+        val command = cl.loadClass("q2.k").getDeclaredMethod("I", String::class.java,
+            java.lang.Double::class.java, String::class.java)
         hook(cl.loadClass("q2.k").getDeclaredMethod("r", Context::class.java)).intercept { chain ->
             val native = chain.proceed()
             val card = bundleField.get(chain.thisObject) as? Bundle
@@ -44,7 +48,10 @@ class RearHooks : XposedModule() {
                 "shown=${RearMedia.shown}, running=${RearMedia.running}, dur=${RearMedia.duration}")
             // shortcut: the MAML view is still built and loaded off-screen (the card keeps sending
             // it AOD/edit commands); stop building it when RearCardView grows its own AOD.
-            (native as? View)?.let { RearCardView(context) } ?: native
+            val self = chain.thisObject
+            (native as? View)?.let {
+                RearCardView(context) { runCatching { command.invoke(self, "interceptDoubleClick", null, null) } }
+            } ?: native
         }
         // The notification card's K(view) passes its Bundle to the MAML view whenever the data
         // changes (another player, new extras): the same moment feeds RearMedia.
