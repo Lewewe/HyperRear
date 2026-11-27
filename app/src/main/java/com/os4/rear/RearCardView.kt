@@ -33,6 +33,7 @@ class RearCardView(context: Context) : View(context) {
         volume.attach()
         HmcBackdrop.addListener(onHmc)
         Spectrum.start(context)
+        post { takeClock() }
         player.snap()
         backdrop()
     }
@@ -42,6 +43,7 @@ class RearCardView(context: Context) : View(context) {
         volume.detach()
         HmcBackdrop.removeListener(onHmc)
         Spectrum.stop()
+        giveClockBack()
         removeCallbacks(tick)
         super.onDetachedFromWindow()
     }
@@ -104,6 +106,46 @@ class RearCardView(context: Context) : View(context) {
         m.postTranslate((w - b.width * s) / 2f, (h - b.height * s) / 2f)
         artPaint.alpha = (255 * alpha).toInt()
         c.drawBitmap(b, m, artPaint)
+    }
+
+    // ------------------------------------------------------------------ the panel's clock
+
+    /**
+     * The rear panel's own clock is a pill at the top right (SmartAssistantPanel's `time_parent`,
+     * a MIUI blur backdrop with the `time` TimeView in it). While this card is up it is clipped
+     * away and [RearPlayer] draws the time over the cover's left edge instead, in its size and
+     * face. shortcut: the clock is the panel's, so it stays hidden if another card shows while
+     * this one is still attached; give it back per page if that turns out to happen.
+     */
+    private var clockBox: View? = null
+    private var clockClip: android.graphics.Rect? = null
+    private val minute = object : Runnable {
+        override fun run() {
+            invalidate()
+            postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
+        }
+    }
+
+    private fun takeClock() {
+        if (!isAttachedToWindow || clockBox != null) return
+        fun find(name: String): View? {
+            val id = resources.getIdentifier(name, "id", context.packageName)
+            return if (id != 0) rootView.findViewById(id) else null
+        }
+        val box = find("time_parent") ?: return
+        (find("time") as? android.widget.TextView)?.let { player.clockLook(it.paint) }
+        clockBox = box
+        clockClip = box.clipBounds
+        box.clipBounds = android.graphics.Rect()
+        minute.run()
+    }
+
+    private fun giveClockBack() {
+        removeCallbacks(minute)
+        val box = clockBox ?: return
+        box.clipBounds = clockClip
+        clockBox = null
+        clockClip = null
     }
 
     // ------------------------------------------------------------------ draw

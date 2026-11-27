@@ -321,6 +321,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             val outT = (swap / 0.5f).coerceIn(0f, 1f)
             drawText(c, out, textLeft, textW, titleBase, h, 1f - outT, -outT)
             drawText(c, cur, textLeft, textW, titleBase, h, inT, 1f - inT)
+            drawClock(c, margin, h * COVER_TOP - h * CLOCK_GAP)
         }
         if (layer >= 0) c.restoreToCount(layer)
         // The bars and the lyrics button keep their spot at the title row's right end.
@@ -537,6 +538,28 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         lyricsPaint.alpha = (255 * lyricsBtn).toInt()
         lyricsIcon.draw(c, cx, cy, side * k, lyricsOn, lyricsPaint)
         buttons[3].set(cx - side * 0.9f, cy - side * 0.9f, cx + side * 0.9f, cy + side * 0.9f)
+    }
+
+    // ------------------------------------------------------------------ clock
+
+    private val clockPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; typeface = Typeface.create(Typeface.DEFAULT, 700, false)
+    }
+    private var clockOn = false
+
+    /** The panel's clock moves here: its text size and face, in white. */
+    fun clockLook(native: Paint) {
+        clockPaint.textSize = native.textSize
+        clockPaint.typeface = native.typeface
+        clockOn = true
+    }
+
+    /** The time as the panel's TimeView writes it, its baseline at [base]. */
+    private fun drawClock(c: Canvas, left: Float, base: Float) {
+        if (!clockOn) return
+        val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm"
+        c.drawText(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(pattern)),
+            left, base, clockPaint)
     }
 
     // ------------------------------------------------------------------ progress
@@ -759,6 +782,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val MARGIN = 0.075f
         // The cover and titles sit as far above the bar as the controls sit below it (73 px on q200).
         const val COVER_TOP = 0.208f
+        /** The clock's baseline this far above the cover. */
+        const val CLOCK_GAP = 0.045f
         const val BAR_Y = 0.66f
         const val CONTROLS_Y = 0.85f
         /** The visualizer slot (share of the height), and the lyrics button against it. */
