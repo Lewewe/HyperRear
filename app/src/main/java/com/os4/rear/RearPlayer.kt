@@ -24,7 +24,9 @@ import kotlin.math.max
  * its title share the top row and the bar and controls take the full width below - HyperOS's own
  * card order.
  *
- * The lyric and visualizer come with HMC-E's data (M2).
+ * With HMC-E, five visualizer bars sit at the title's right end and a lyrics button under them
+ * opens HMC-E's lyric over the cover and titles (LyricsFlow), the bar and
+ * controls staying put.
  */
 class RearPlayer(private val context: android.content.Context, private val dens: Float,
                  private val invalidate: () -> Unit) {
@@ -71,8 +73,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
     private val rect = RectF()
     private val icon = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val iconPath = android.graphics.Path()
-    /** Buttons as last drawn: prev, play/pause, next. */
-    private val buttons = Array(3) { RectF() }
+    /** Buttons as last drawn: prev, play/pause, next, lyrics. */
+    private val buttons = Array(4) { RectF() }
     private var pressed = -1
     private val m = Matrix()
 
@@ -307,14 +309,28 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val cur = current
         val inT = if (out == null) swap else ((swap - 0.15f) / 0.85f).coerceIn(0f, 1f)
         if (stepMotion()) invalidate()
-        drawCover(c, side, radius, scale, out, cur, inT, cx, cy)
-
-        val textLeft = margin + side + h * 0.055f
-        val textW = w - textLeft - margin
-        val titleBase = cy + h * 0.02f
-        val outT = (swap / 0.5f).coerceIn(0f, 1f)
-        drawText(c, out, textLeft, textW, titleBase, h, 1f - outT, -outT)
-        drawText(c, cur, textLeft, textW, titleBase, h, inT, 1f - inT)
+        stepLyrics()
+        val lt = lyricsT
+        val box = h * VIS_W
+        val layer = if (lt > 0f) c.saveLayerAlpha(0f, 0f, w, h * BAR_Y - h * 0.04f, (255 * (1f - lt)).toInt()) else -1
+        if (lt < 1f) {
+            drawCover(c, side, radius, scale, out, cur, inT, cx, cy)
+            val textLeft = margin + side + h * 0.055f
+            val textW = w - textLeft - margin - (if (Spectrum.connected || lyricsBtn > 0f) box * 1.3f else 0f)
+            val titleBase = cy + h * 0.02f
+            val outT = (swap / 0.5f).coerceIn(0f, 1f)
+            drawText(c, out, textLeft, textW, titleBase, h, 1f - outT, -outT)
+            drawText(c, cur, textLeft, textW, titleBase, h, inT, 1f - inT)
+        }
+        if (layer >= 0) c.restoreToCount(layer)
+        // The bars and the lyrics button keep their spot at the title row's right end.
+        val sideX = w - margin - box / 2f
+        drawVisualizer(c, sideX, cy - h * 0.012f, box, if (cur != null) 1f else 0f)
+        drawLyricsButton(c, sideX, cy + h * 0.065f, box * LYRICS_SIDE)
+        if (lt > 0f && lyricsWanted) {
+            flow.sizeScale = LYRICS_SCALE
+            if (flow.draw(c, margin, h * 0.06f, w - margin - box * 1.4f, h * BAR_Y - h * 0.06f, lt)) invalidate()
+        }
 
         val barLeft = margin
         val barW = w - 2f * margin
@@ -430,6 +446,96 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         if (cover.artist.isNotEmpty()) c.drawText(
             TextUtils.ellipsize(cover.artist, artistPaint, width, TextUtils.TruncateAt.END).toString(),
             left, base + dy + artistPaint.textSize * 1.4f, artistPaint)
+    }
+
+    // ------------------------------------------------------------------ HMC-E's visualizer and lyric
+
+    private val visPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private var visShader: android.graphics.LinearGradient? = null
+    private var visShaderKey = 0L
+
+    /** Lifted towards white: HMC-E's colours keep the artwork's shades, lost on its own backdrop. */
+    private fun brighter(c: Int): Int {
+        fun ch(v: Int) = (v + (255 - v) * BAR_LIFT).toInt().coerceIn(0, 255)
+        return Color.rgb(ch(Color.red(c)), ch(Color.green(c)), ch(Color.blue(c)))
+    }
+
+    /**
+     * Five bars, drawn as HMC-E's AudioWaveDrawable draws them in a square slot: a
+     * twelfth of the slot wide, spread over 7/8 of it, each 9% + 85% * level tall and never
+     * shorter than wide, in the Bar color setting's gradient.
+     */
+    private fun drawVisualizer(c: Canvas, cx: Float, cy: Float, box: Float, alpha: Float) {
+        if (!Spectrum.connected || alpha <= 0f) return
+        Spectrum.step()
+        if (Spectrum.available) invalidate()
+        val width = box / 12f
+        val pitch = (box * 0.875f - width) / 4f
+        val x0 = cx - 2f * pitch - width / 2f
+        val key = (Spectrum.top.toLong() shl 32) xor (Spectrum.bottom.toLong() and 0xffffffffL) xor
+            java.lang.Float.floatToIntBits(cy).toLong()
+        if (visShader == null || key != visShaderKey) {
+            visShaderKey = key
+            visShader = android.graphics.LinearGradient(0f, cy - box / 2f, 0f, cy + box / 2f,
+                brighter(Spectrum.top), brighter(Spectrum.bottom), android.graphics.Shader.TileMode.CLAMP)
+        }
+        visPaint.shader = visShader
+        visPaint.alpha = (255 * alpha).toInt()
+        for (i in 0 until 5) {
+            val bh = (box * (0.09f + 0.85f * Spectrum.levels[i])).coerceAtLeast(width)
+            val x = x0 + i * pitch
+            c.drawRoundRect(x, cy - bh / 2f, x + width, cy + bh / 2f, width / 2f, width / 2f, visPaint)
+        }
+        visPaint.shader = null
+    }
+
+    private val flow = LyricsFlow(dens)
+    private val lyricsIcon = LyricsIcon()
+    private val lyricsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private var lyricsWanted = false
+    private var lyricsOn = false
+    private var lyricsT = 0f
+    private var lyricsAnim: ValueAnimator? = null
+    private var lyricsBtn = 0f
+    private var lyricsBtnAnim: ValueAnimator? = null
+
+    /**
+     * The button shows while HMC-E has a lyric for this track; open, the lyric replaces the cover
+     * and titles. shortcut: a song with none closes the lyric; saying "no lyrics" would need strings,
+     * which the rear launcher's process does not have.
+     */
+    private fun stepLyrics() {
+        val has = HmcLyrics.matches(RearMedia.key.substringBefore('|'), RearMedia.title)
+        if (has == lyricsWanted) return
+        lyricsWanted = has
+        if (!has && lyricsOn) toggleLyrics()
+        lyricsBtnAnim?.cancel()
+        lyricsBtnAnim = ValueAnimator.ofFloat(lyricsBtn, if (has) 1f else 0f).apply {
+            duration = if (has) 260L else 200L
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { lyricsBtn = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    private fun toggleLyrics() {
+        if (!lyricsOn && !lyricsWanted) return
+        lyricsOn = !lyricsOn
+        lyricsAnim?.cancel()
+        lyricsAnim = ValueAnimator.ofFloat(lyricsT, if (lyricsOn) 1f else 0f).apply {
+            duration = 380L
+            interpolator = android.view.animation.PathInterpolator(0.05f, 0.7f, 0.1f, 1f)
+            addUpdateListener { lyricsT = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    private fun drawLyricsButton(c: Canvas, cx: Float, cy: Float, side: Float) {
+        if (lyricsBtn <= 0f) { buttons[3].setEmpty(); return }
+        val k = (APPEAR_SCALE + (1f - APPEAR_SCALE) * lyricsBtn) * (if (pressed == 3) 0.85f else 1f)
+        lyricsPaint.alpha = (255 * lyricsBtn).toInt()
+        lyricsIcon.draw(c, cx, cy, side * k, lyricsOn, lyricsPaint)
+        buttons[3].set(cx - side * 0.9f, cy - side * 0.9f, cx + side * 0.9f, cy + side * 0.9f)
     }
 
     // ------------------------------------------------------------------ progress
@@ -626,6 +732,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             0 -> { start(prevIcon); beginSkip(); RearMedia.previous() }
             1 -> RearMedia.playPause()
             2 -> { start(nextIcon); beginSkip(); RearMedia.next() }
+            3 -> toggleLyrics()
         }
     }
 
@@ -652,5 +759,12 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val COVER_TOP = 0.14f   // the cover and titles sit a little lower than the side margin
         const val BAR_Y = 0.66f
         const val CONTROLS_Y = 0.85f
+        /** The visualizer slot (share of the height), and the lyrics button against it. */
+        const val VIS_W = 0.1f
+        const val LYRICS_SIDE = 0.8f
+        const val APPEAR_SCALE = 0.6f
+        const val BAR_LIFT = 0.45f
+        /** HMC-E's lyric size scaled down for the rear's small panel. */
+        const val LYRICS_SCALE = 0.55f
     }
 }

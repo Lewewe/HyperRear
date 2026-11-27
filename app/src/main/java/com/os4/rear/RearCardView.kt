@@ -25,11 +25,14 @@ class RearCardView(context: Context) : View(context) {
     private val player = RearPlayer(context, dens) { invalidate() }
     private val onMedia: () -> Unit = { player.sync(); backdrop(); invalidate() }
     private val volume = VolumeRing(this)
+    private val onHmc: () -> Unit = { backdrop(); invalidate() }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         RearMedia.addListener(onMedia)
         volume.attach()
+        HmcBackdrop.addListener(onHmc)
+        Spectrum.start(context)
         player.snap()
         backdrop()
     }
@@ -37,17 +40,21 @@ class RearCardView(context: Context) : View(context) {
     override fun onDetachedFromWindow() {
         RearMedia.removeListener(onMedia)
         volume.detach()
+        HmcBackdrop.removeListener(onHmc)
+        Spectrum.stop()
         removeCallbacks(tick)
         super.onDetachedFromWindow()
     }
 
     // ------------------------------------------------------------------ backdrop
 
-    private val node = RenderNode("backdrop").apply {
-        val blur = RenderEffect.createBlurEffect(BLUR_DP * dens, BLUR_DP * dens, Shader.TileMode.CLAMP)
-        setRenderEffect(RenderEffect.createColorFilterEffect(
-            ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.35f) }), blur))
-    }
+    private val ownLook = RenderEffect.createColorFilterEffect(
+        ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.35f) }),
+        RenderEffect.createBlurEffect(BLUR_DP * dens, BLUR_DP * dens, Shader.TileMode.CLAMP))
+    /** HMC-E's backdrop is already a blur of colour: only softened. */
+    private val hmcLook = RenderEffect.createBlurEffect(6f * dens, 6f * dens, Shader.TileMode.CLAMP)
+    private var fromHmc = false
+    private val node = RenderNode("backdrop").apply { setRenderEffect(ownLook) }
     private val artPaint = Paint(Paint.FILTER_BITMAP_FLAG)
     private val m = Matrix()
     private var current: Bitmap? = null
@@ -56,11 +63,22 @@ class RearCardView(context: Context) : View(context) {
     private var mix = 1f
     private var fade: ValueAnimator? = null
 
-    /** Same song, the picture is swapped in place; a new one comes in over the old (no dip). */
+    /**
+     * HMC-E's lock screen backdrop when it has sent one, the cover blurred here otherwise. Same
+     * song, the picture is swapped in place; a new one comes in over the old (no dip).
+     */
     private fun backdrop() {
-        val next = RearMedia.art ?: return
-        if (current != null && RearMedia.key == currentKey) { current = next; return }
-        currentKey = RearMedia.key
+        val hmc = HmcBackdrop.bitmap
+        val useHmc = hmc != null
+        if (useHmc != fromHmc) {
+            fromHmc = useHmc
+            node.setRenderEffect(if (useHmc) hmcLook else ownLook)
+            currentKey = ""
+        }
+        val next = (if (useHmc) hmc else RearMedia.art) ?: return
+        val key = if (useHmc) HmcBackdrop.key else RearMedia.key
+        if (current != null && key == currentKey) { current = next; return }
+        currentKey = key
         outgoing = current
         current = next
         if (outgoing == null) { mix = 1f; return }
