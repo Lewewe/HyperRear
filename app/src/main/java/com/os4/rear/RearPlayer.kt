@@ -329,7 +329,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         drawLyricsButton(c, sideX, cy + h * 0.065f, box * LYRICS_SIDE)
         if (lt > 0f && lyricsWanted) {
             flow.sizeScale = LYRICS_SCALE
-            if (flow.draw(c, margin, h * 0.06f, w - margin - box * 1.4f, h * BAR_Y - h * 0.06f, lt)) invalidate()
+            // From the panel's top edge, so the rows under the sung line stay above the bar.
+            if (flow.draw(c, margin, 0f, w - margin - box * 1.4f, h * BAR_Y - h * 0.05f, lt)) invalidate()
         }
 
         val barLeft = margin
@@ -765,6 +766,6 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val APPEAR_SCALE = 0.6f
         const val BAR_LIFT = 0.45f
         /** HMC-E's lyric size scaled down for the rear's small panel. */
-        const val LYRICS_SCALE = 0.55f
+        const val LYRICS_SCALE = 0.45f
     }
 }
