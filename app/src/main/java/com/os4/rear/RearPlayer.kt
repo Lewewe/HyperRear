@@ -313,7 +313,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         stepLyrics()
         val lt = lyricsT
         val box = h * VIS_W
-        val layer = if (lt > 0f) c.saveLayerAlpha(0f, 0f, w, h * BAR_Y - h * 0.04f, (255 * (1f - lt)).toInt()) else -1
+        // Unbounded: the cover's shadow reaches past its row, and a bound cut it while the lyric faded.
+        val layer = if (lt > 0f) c.saveLayerAlpha(null, (255 * (1f - lt)).toInt()) else -1
         if (lt < 1f) {
             // Opening the lyric, the cover row sinks into the middle of the panel as it fades.
             c.save()
