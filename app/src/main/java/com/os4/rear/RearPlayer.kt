@@ -322,10 +322,9 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             drawCover(c, side, radius, scale, out, cur, inT, cx, cy)
             val textLeft = margin + side + h * 0.055f
             val textW = w - textLeft - margin - (if (Spectrum.connected || lyricsBtn > 0f) box * 1.3f else 0f)
-            val titleBase = cy + h * 0.02f
             val outT = (swap / 0.5f).coerceIn(0f, 1f)
-            drawText(c, out, textLeft, textW, titleBase, h, 1f - outT, -outT)
-            drawText(c, cur, textLeft, textW, titleBase, h, inT, 1f - inT)
+            drawText(c, out, textLeft, textW, cy, h, 1f - outT, -outT)
+            drawText(c, cur, textLeft, textW, cy, h, inT, 1f - inT)
             c.restore()
         }
         if (layer >= 0) c.restoreToCount(layer)
@@ -450,7 +449,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
     private val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
     private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Color.WHITE }
 
-    private fun drawText(c: Canvas, cover: Cover?, left: Float, width: Float, base: Float, h: Float,
+    private fun drawText(c: Canvas, cover: Cover?, left: Float, width: Float, mid: Float, h: Float,
                          alpha: Float, rise: Float) {
         if (cover == null || alpha <= 0f || width <= 0f) return
         val dy = rise * h * 0.04f
@@ -458,16 +457,20 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         artistPaint.textSize = h * 0.055f
         titlePaint.alpha = (255 * alpha).toInt()
         artistPaint.alpha = (170 * alpha).toInt()
-        // Up to two title lines; a second one lifts the block by half a line so it stays centred on the cover.
+        // Up to two title lines and the artist, the whole block centred on the cover's middle ([mid]).
         val title = titleLayout(cover.title, width.toInt())
-        val lift = (title.getLineBaseline(title.lineCount - 1) - title.getLineBaseline(0)) / 2f
+        val lines = title.getLineBaseline(title.lineCount - 1) - title.getLineBaseline(0)
+        val artist = if (cover.artist.isNotEmpty()) artistPaint.textSize * 1.4f else 0f
+        val above = -titlePaint.fontMetrics.ascent
+        val below = if (artist > 0f) artistPaint.fontMetrics.descent else titlePaint.fontMetrics.descent
+        val first = mid + dy - (above + lines + artist + below) / 2f + above
         c.save()
-        c.translate(left, base + dy - lift - title.getLineBaseline(0))
+        c.translate(left, first - title.getLineBaseline(0))
         title.draw(c)
         c.restore()
-        if (cover.artist.isNotEmpty()) c.drawText(
+        if (artist > 0f) c.drawText(
             TextUtils.ellipsize(cover.artist, artistPaint, width, TextUtils.TruncateAt.END).toString(),
-            left, base + dy + lift + artistPaint.textSize * 1.4f, artistPaint)
+            left, first + lines + artist, artistPaint)
     }
 
     private val titleLayouts = HashMap<String, StaticLayout>()
