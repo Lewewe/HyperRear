@@ -757,7 +757,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val SKIP_SPREAD = 0.36f
         /** The rear layout, as shares of the card's height. */
         const val MARGIN = 0.075f
-        const val COVER_TOP = 0.14f   // the cover and titles sit a little lower than the side margin
+        // The cover and titles sit as far above the bar as the controls sit below it (73 px on q200).
+        const val COVER_TOP = 0.208f
         const val BAR_Y = 0.66f
         const val CONTROLS_Y = 0.85f
         /** The visualizer slot (share of the height), and the lyrics button against it. */
