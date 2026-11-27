@@ -376,8 +376,13 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             barShown = ringEase.getInterpolation((1f - ringT).coerceIn(0f, 1f))
         }
         if (barShown >= 1f || !c.isHardwareAccelerated) drawProgress(c, barLeft, barW, h * BAR_Y, h, barAlpha * barShown)
-        // Hidden, the bar stops following the track: the ring reads it live (a restart to 0 included).
-        else if (barShown <= 0f) { bar.setEmpty(); barF = Float.NaN }
+        // Hidden, the bar still follows the track, its glides included: the ring shows the same place.
+        else if (barShown <= 0f) {
+            bar.setEmpty()
+            val now = SystemClock.uptimeMillis()
+            val d = trackLength(now)
+            if (d > 0L) stepProgress(now, d)
+        }
         else {
             val blur = LensRing.BLUR_DP * dens * (1f - barShown)
             barNode.setPosition(0, 0, w.toInt(), h.toInt())
@@ -719,14 +724,15 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         return if (d > 0L) (RearMedia.positionNow().toFloat() / d).coerceIn(0f, 1f) else 0f
     }
 
-    private fun drawProgress(c: Canvas, left: Float, width: Float, y: Float, h: Float, alpha: Float) {
-        val now = SystemClock.uptimeMillis()
-        // A new track that has not reported its length yet keeps the old one for a moment.
+    /** A new track that has not reported its length yet keeps the old one for a moment. */
+    private fun trackLength(now: Long): Long {
         var d = RearMedia.duration
         if (d > 0L) { lastDuration = d; lastDurationAt = now } else if (now - lastDurationAt < 2000L) d = lastDuration
-        if (alpha <= 0f || d <= 0L || width <= 0f) { bar.setEmpty(); return }
-        val barRight = left + width
-        bar.set(left, y - h * 0.04f, barRight, y + h * 0.04f)
+        return d
+    }
+
+    /** Where the bar is now ([barF]), gliding to a jump it did not make itself. */
+    private fun stepProgress(now: Long, d: Long): Float {
         val live = RearMedia.positionNow().toFloat() / d
         if (!seekHold.isNaN() && (now > seekHoldUntil || kotlin.math.abs(live - seekHold) < 0.01f)) seekHold = Float.NaN
         val target = (if (!scrub.isNaN()) scrub else if (!seekHold.isNaN()) seekHold else live).coerceIn(0f, 1f)
@@ -738,6 +744,16 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val f = if (scrub.isNaN() && g < 1f) glideFrom + (target - glideFrom) * glideEase.getInterpolation(g) else target
         if (g < 1f) invalidate()
         barF = f
+        return f
+    }
+
+    private fun drawProgress(c: Canvas, left: Float, width: Float, y: Float, h: Float, alpha: Float) {
+        val now = SystemClock.uptimeMillis()
+        val d = trackLength(now)
+        if (alpha <= 0f || d <= 0L || width <= 0f) { bar.setEmpty(); return }
+        val barRight = left + width
+        bar.set(left, y - h * 0.04f, barRight, y + h * 0.04f)
+        val f = stepProgress(now, d)
 
         val thick = dens * (6f + 6f * grip)
         val rs = trackShader
