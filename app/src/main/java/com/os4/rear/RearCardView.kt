@@ -24,6 +24,8 @@ class RearCardView(
     context: Context,
     /** Tells the panel this touch is the card's, so a double tap on a control does not sleep the screen. */
     private val interceptDoubleClick: () -> Unit = {},
+    /** Read each time the card is shown: HyperRear's volume ring setting. */
+    private val volumeRing: () -> Boolean = { true },
 ) : View(context) {
     private val dens = resources.displayMetrics.density
     private val player = RearPlayer(context, dens) { invalidate() }
@@ -34,7 +36,7 @@ class RearCardView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         RearMedia.addListener(onMedia)
-        volume.attach()
+        if (volumeRing()) volume.attach()
         HmcBackdrop.addListener(onHmc)
         Spectrum.start(context)
         post { takeClock() }

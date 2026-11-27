@@ -1,6 +1,12 @@
 package com.os4.rear
 
+import android.app.Application
+import android.app.Instrumentation
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -22,12 +28,34 @@ import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
  */
 class RearHooks : XposedModule() {
     @Volatile private var topMediaPkg = ""
+    /** Set from HMC-E's Extensions page through HyperRear's bridge; null if LSPosed has none for us. */
+    private val settings: SharedPreferences? by lazy {
+        runCatching { getRemotePreferences(RearSettings.GROUP) }
+            .onFailure { log(Log.WARN, TAG, "no settings, defaults used", it) }.getOrNull()
+    }
 
     override fun onPackageReady(param: PackageReadyParam) {
         if (param.packageName != SUBSCREEN || !param.isFirstPackage) return
         val cl = param.classLoader
         runCatching { hookCard(cl) }.onFailure { log(Log.ERROR, TAG, "card hook failed", it) }
         runCatching { hookWhitelist(cl) }.onFailure { log(Log.ERROR, TAG, "whitelist hook failed", it) }
+        runCatching { answerPing() }.onFailure { log(Log.ERROR, TAG, "ping receiver failed", it) }
+    }
+
+    /** Tells HyperRear's bridge (HMC-E's setup) that this build of the hook is loaded here. */
+    private fun answerPing() {
+        val apkTime = java.io.File(moduleApplicationInfo.sourceDir).lastModified()
+        hook(Instrumentation::class.java.getDeclaredMethod("callApplicationOnCreate", Application::class.java))
+            .intercept { chain ->
+                val result = chain.proceed()
+                (chain.getArg(0) as Application).registerReceiver(object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) {
+                        resultCode = RearSettings.LOADED
+                        getResultExtras(true).putLong(RearSettings.APK_TIME, apkTime)
+                    }
+                }, IntentFilter(RearSettings.PING), Context.RECEIVER_EXPORTED)
+                result
+            }
     }
 
     private fun hookCard(cl: ClassLoader) {
@@ -52,6 +80,8 @@ class RearHooks : XposedModule() {
             val native = chain.proceed()
             val card = bundleField.get(chain.thisObject) as? Bundle
             if (card?.getString("package_name") != MUSIC_CARD) return@intercept native
+            // Read when a card is built: HMC-E restarts the rear launcher when this changes.
+            if (!RearSettings.enabled(settings)) return@intercept native
             val context = chain.getArg(0) as Context
             RearMedia.update(context, card.getBundle("media_data"))
             log(Log.INFO, TAG, "music card swapped for ${RearMedia.key}, art=${RearMedia.art?.width}x${RearMedia.art?.height}, " +
@@ -59,10 +89,10 @@ class RearHooks : XposedModule() {
             // shortcut: the MAML view is still built and loaded off-screen (the card keeps sending
             // it AOD/edit commands); stop building it when RearCardView grows its own AOD.
             (native as? View)?.let {
-                RearCardView(context) {
+                RearCardView(context, {
                     runCatching { gestureOf(context)?.let { g -> intercept.setBoolean(g, true) } }
                         .onFailure { log(Log.WARN, TAG, "double tap not held", it) }
-                }
+                }, { RearSettings.volumeRing(settings) })
             } ?: native
         }
         // The notification card's K(view) passes its Bundle to the MAML view whenever the data

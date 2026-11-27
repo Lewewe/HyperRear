@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- No screen of its own: an LSPosed module inside the rear screen's launcher. -->
-    <application android:label="HyperRear" android:icon="@drawable/ic_hyperrear" android:hasCode="true" />
+    <!-- HMC-E, signed like this app, reads and sets it through the bridge. -->
+    <permission android:name="com.yzc26623.HyperRear.permission.MANAGE_EXTENSION"
+        android:protectionLevel="signature" />
+    <!-- No screen of its own: an LSPosed module inside the rear screen's launcher, set up from HMC-E's Extensions page. -->
+    <application android:name=".RearApp" android:label="HyperRear" android:icon="@drawable/ic_hyperrear"
+        android:hasCode="true">
+        <provider
+            android:name=".Bridge"
+            android:authorities="com.yzc26623.HyperRear.bridge"
+            android:exported="true" />
+    </application>
 </manifest>
