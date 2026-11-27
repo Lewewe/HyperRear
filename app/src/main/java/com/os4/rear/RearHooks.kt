@@ -34,10 +34,20 @@ class RearHooks : XposedModule() {
         // The card's Bundle: the only Bundle field of the cards' base class.
         val bundleField = cl.loadClass("q2.v").declaredFields.single { it.type == Bundle::class.java }
             .apply { isAccessible = true }
-        // The card's extern-command handler: the native MAML card sends it "interceptDoubleClick"
-        // from its buttons, which keeps the panel's double tap from sleeping the screen for that touch.
-        val command = cl.loadClass("q2.k").getDeclaredMethod("I", String::class.java,
-            java.lang.Double::class.java, String::class.java)
+        // The panel's double tap (Z1.d, DoubleClickGesture) sleeps the rear screen unless its `k`
+        // is set during the touch; the native MAML card sets it ("interceptDoubleClick") from its
+        // buttons. Its gestures see each event before the views, so setting it on our ACTION_DOWN
+        // holds for that tap.
+        val doubleClick = cl.loadClass("Z1.d")
+        val intercept = doubleClick.getDeclaredField("k").apply { isAccessible = true }
+        fun gestureOf(context: Context): Any? {
+            var c: Context? = context
+            while (c != null && c !is android.app.Activity) c = (c as? android.content.ContextWrapper)?.baseContext
+            val activity = c ?: return null
+            val field = generateSequence<Class<*>>(activity.javaClass) { it.superclass }
+                .flatMap { it.declaredFields.asSequence() }.firstOrNull { it.type == doubleClick } ?: return null
+            return field.apply { isAccessible = true }.get(activity)
+        }
         hook(cl.loadClass("q2.k").getDeclaredMethod("r", Context::class.java)).intercept { chain ->
             val native = chain.proceed()
             val card = bundleField.get(chain.thisObject) as? Bundle
@@ -48,9 +58,11 @@ class RearHooks : XposedModule() {
                 "shown=${RearMedia.shown}, running=${RearMedia.running}, dur=${RearMedia.duration}")
             // shortcut: the MAML view is still built and loaded off-screen (the card keeps sending
             // it AOD/edit commands); stop building it when RearCardView grows its own AOD.
-            val self = chain.thisObject
             (native as? View)?.let {
-                RearCardView(context) { runCatching { command.invoke(self, "interceptDoubleClick", null, null) } }
+                RearCardView(context) {
+                    runCatching { gestureOf(context)?.let { g -> intercept.setBoolean(g, true) } }
+                        .onFailure { log(Log.WARN, TAG, "double tap not held", it) }
+                }
             } ?: native
         }
         // The notification card's K(view) passes its Bundle to the MAML view whenever the data
