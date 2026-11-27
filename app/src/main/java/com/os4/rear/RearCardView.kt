@@ -117,7 +117,7 @@ class RearCardView(
     /**
      * The rear panel's own clock is a pill at the top right (SmartAssistantPanel's `time_parent`,
      * a MIUI blur backdrop with the `time` TimeView in it). While this card is up it is clipped
-     * away and the time is drawn in its place, without the pill, in its size and face. shortcut: the clock is the panel's, so it stays hidden if another card shows while
+     * away and the time is drawn at the top of the player's right column instead, without the pill, in its size and face. shortcut: the clock is the panel's, so it stays hidden if another card shows while
      * this one is still attached; give it back per page if that turns out to happen.
      */
     private var clockBox: View? = null
@@ -143,16 +143,10 @@ class RearCardView(
         minute.run()
     }
 
-    private val boxAt = IntArray(2)
-    private val selfAt = IntArray(2)
-
-    /** In the pill's place and with its fade, the panel still moving it as it would. */
-    private fun drawClock(c: Canvas) {
-        val box = clockBox ?: return
-        box.getLocationOnScreen(boxAt)
-        getLocationOnScreen(selfAt)
-        player.drawClock(c, boxAt[0] - selfAt[0] + box.width / 2f, boxAt[1] - selfAt[1] + box.height / 2f,
-            box.alpha * ((box.parent as? View)?.alpha ?: 1f))
+    /** The pill's fade, so the time in the player's column comes and goes as the panel's would. */
+    private fun clockAlpha(): Float {
+        val box = clockBox ?: return 0f
+        return box.alpha * ((box.parent as? View)?.alpha ?: 1f)
     }
 
     private fun giveClockBack() {
@@ -191,9 +185,9 @@ class RearCardView(
         val left = cameraLeft()
         c.save()
         c.translate(left, 0f)
+        player.clockAlpha = clockAlpha()
         player.draw(c, w - left, h, w)
         c.restore()
-        drawClock(c)
         volume.draw(c, w, h)
         // The bar and its times move on their own while playing.
         removeCallbacks(tick)

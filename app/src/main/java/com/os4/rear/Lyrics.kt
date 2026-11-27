@@ -123,6 +123,9 @@ class LyricsIcon {
         c.restore()
     }
 
+    /** The drawn icon's height at [side]. */
+    fun height(side: Float) = frame.height() * scale(side)
+
     /** How much the icon's path is scaled up at [side]: a paint's mask blur grows with it. */
     fun scale(side: Float) = side * FILL / maxOf(frame.width(), frame.height())
 

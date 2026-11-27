@@ -14,6 +14,7 @@ import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.os.SystemClock
 import android.text.TextPaint
+import android.text.StaticLayout
 import android.text.TextUtils
 import android.view.animation.PathInterpolator
 import kotlin.math.max
@@ -328,10 +329,15 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             c.restore()
         }
         if (layer >= 0) c.restoreToCount(layer)
-        // The bars and the lyrics button keep their spot at the title row's right end.
+        // The right column spans the cover's height: the clock's digits start on its top edge, the
+        // lyrics button ends on its bottom one, the bars sit midway between them.
         val sideX = w - margin - box / 2f
-        drawVisualizer(c, sideX, cy - h * 0.012f, box, if (cur != null) 1f else 0f)
-        drawLyricsButton(c, sideX, cy + h * 0.065f, box * LYRICS_SIDE)
+        val lyricsSide = box * LYRICS_SIDE
+        val top = cy - side / 2f
+        val iconTop = cy + side / 2f - lyricsIcon.height(lyricsSide)
+        val clockH = drawClock(c, sideX, top)
+        drawVisualizer(c, sideX, (top + clockH + iconTop) / 2f, box, if (cur != null) 1f else 0f)
+        drawLyricsButton(c, sideX, iconTop + lyricsIcon.height(lyricsSide) / 2f, lyricsSide)
         if (lt > 0f && lyricsWanted) {
             flow.sizeScale = LYRICS_SCALE
             // It grows out of the middle as the cover row leaves, and sinks back as it returns.
@@ -452,11 +458,27 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         artistPaint.textSize = h * 0.055f
         titlePaint.alpha = (255 * alpha).toInt()
         artistPaint.alpha = (170 * alpha).toInt()
-        c.drawText(TextUtils.ellipsize(cover.title, titlePaint, width, TextUtils.TruncateAt.END).toString(),
-            left, base + dy, titlePaint)
+        // Up to two title lines; a second one lifts the block by half a line so it stays centred on the cover.
+        val title = titleLayout(cover.title, width.toInt())
+        val lift = (title.getLineBaseline(title.lineCount - 1) - title.getLineBaseline(0)) / 2f
+        c.save()
+        c.translate(left, base + dy - lift - title.getLineBaseline(0))
+        title.draw(c)
+        c.restore()
         if (cover.artist.isNotEmpty()) c.drawText(
             TextUtils.ellipsize(cover.artist, artistPaint, width, TextUtils.TruncateAt.END).toString(),
-            left, base + dy + artistPaint.textSize * 1.4f, artistPaint)
+            left, base + dy + lift + artistPaint.textSize * 1.4f, artistPaint)
+    }
+
+    private val titleLayouts = HashMap<String, StaticLayout>()
+
+    /** Kept per title, width and size: both covers' titles are laid out every frame of a swap. */
+    private fun titleLayout(text: String, width: Int): StaticLayout {
+        if (titleLayouts.size > 8) titleLayouts.clear()
+        return titleLayouts.getOrPut("$width|${titlePaint.textSize}|$text") {
+            StaticLayout.Builder.obtain(text, 0, text.length, titlePaint, width)
+                .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).setIncludePad(false).build()
+        }
     }
 
     // ------------------------------------------------------------------ HMC-E's visualizer and lyric
@@ -555,6 +577,9 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         color = Color.WHITE; typeface = Typeface.create(Typeface.DEFAULT, 700, false)
     }
     private var clockOn = false
+    private val digits = android.graphics.Rect()
+    /** The panel's clock pill's fade, set by the card each frame. */
+    var clockAlpha = 0f
 
     /** The panel's clock is drawn here instead: its text size and face, in white. */
     fun clockLook(native: Paint) {
@@ -563,15 +588,18 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         clockOn = true
     }
 
-    /** The time as the panel's TimeView writes it, centred on [cx], [cy]. */
-    fun drawClock(c: Canvas, cx: Float, cy: Float, alpha: Float) {
-        if (!clockOn || alpha <= 0f) return
-        val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm"
-        clockPaint.textAlign = Paint.Align.CENTER
-        clockPaint.alpha = (255 * alpha).toInt()
-        val fm = clockPaint.fontMetrics
-        c.drawText(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(pattern)),
-            cx, cy - (fm.ascent + fm.descent) / 2f, clockPaint)
+    /** The time as the panel's TimeView writes it, centred on [cx], its digits' top at [top]; returns their height. */
+    private fun drawClock(c: Canvas, cx: Float, top: Float): Float {
+        if (!clockOn) return 0f
+        clockPaint.getTextBounds("0", 0, 1, digits)
+        if (clockAlpha > 0f) {
+            val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm"
+            clockPaint.textAlign = Paint.Align.CENTER
+            clockPaint.alpha = (255 * clockAlpha).toInt()
+            c.drawText(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(pattern)),
+                cx, top - digits.top, clockPaint)
+        }
+        return digits.height().toFloat()
     }
 
     // ------------------------------------------------------------------ progress
