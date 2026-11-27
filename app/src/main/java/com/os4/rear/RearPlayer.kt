@@ -344,7 +344,19 @@ class RearPlayer(private val context: android.content.Context, private val dens:
             val k = 1f - LYRICS_SHRINK * (1f - lt)
             c.scale(k, k, w / 2f, h * BAR_Y / 2f)
             // From the panel's top edge, so the rows under the sung line stay above the bar.
-            if (flow.draw(c, margin, 0f, w - margin - box * 1.4f, h * BAR_Y - h * 0.05f, lt)) invalidate()
+            // A line half past the bottom edge fades out over the last rows instead of being cut flat.
+            val bottom = h * BAR_Y - h * 0.04f
+            val faded = c.saveLayer(0f, 0f, w, bottom, null)
+            if (flow.draw(c, margin, 0f, w - margin - box * 1.4f, bottom, lt)) invalidate()
+            val fadeTop = bottom - h * LYRICS_FADE
+            if (fadeShader == null || fadeShaderAt != fadeTop) {
+                fadeShaderAt = fadeTop
+                fadeShader = android.graphics.LinearGradient(0f, fadeTop, 0f, bottom, 0, Color.BLACK,
+                    android.graphics.Shader.TileMode.CLAMP)
+            }
+            fadePaint.shader = fadeShader
+            c.drawRect(0f, fadeTop, w, bottom, fadePaint)
+            c.restoreToCount(faded)
             c.restore()
         }
 
@@ -526,6 +538,11 @@ class RearPlayer(private val context: android.content.Context, private val dens:
     }
 
     private val flow = LyricsFlow(dens)
+    private val fadePaint = Paint().apply {
+        xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+    }
+    private var fadeShader: android.graphics.LinearGradient? = null
+    private var fadeShaderAt = 0f
     private val lyricsIcon = LyricsIcon()
     private val lyricsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private var lyricsWanted = false
@@ -834,6 +851,8 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val BAR_LIFT = 0.45f
         /** HMC-E's lyric size scaled down for the rear's small panel. */
         const val LYRICS_SCALE = 0.45f
+        /** The lyric's bottom fade, of the height. */
+        const val LYRICS_FADE = 0.1f
         /** Opening the lyric: how far the cover row sinks into the middle and the lyric grows out of it. */
         const val LYRICS_SHRINK = 0.08f
     }
