@@ -20,11 +20,8 @@ import android.view.animation.DecelerateInterpolator
  * lens (growing from under its edge, fading in and sharpening from a blur), then goes back in.
  */
 class VolumeRing(private val view: View) {
-    private val dens = view.resources.displayMetrics.density
     private val audio = view.context.getSystemService(AudioManager::class.java)
-    private val node = RenderNode("volume")
-    private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Color.argb(70, 255, 255, 255) }
-    private val level = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = Color.WHITE }
+    private val ring = LensRing(view.resources.displayMetrics.density)
 
     private var shown = 0f      // 0 hidden in the lens .. 1 out
     private var target = 0f
@@ -84,11 +81,35 @@ class VolumeRing(private val view: View) {
         }
     }
 
-    /** [w] x [h] is the whole rear screen; the lens is where the native camera guide draws it. */
+    /** [w] x [h] is the whole rear screen. */
     fun draw(c: Canvas, w: Float, h: Float) {
-        if (shown <= 0f || frac.isNaN() || !c.isHardwareAccelerated) return
+        if (!frac.isNaN()) ring.draw(c, w, h, LensRing.TOP_Y, shown, frac)
+    }
+
+    companion object {
+        private const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
+        private const val EXTRA_STREAM = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+        private const val SHOW_MS = 320L
+        private const val HIDE_MS = 420L
+        private const val HOLD_MS = 1600L
+        private const val SLIDE_MS = 180L
+    }
+}
+
+/**
+ * A level as a ring round one of the rear cameras: [shown] brings it out of the lens (growing
+ * from under its edge, fading in and sharpening from a blur) and back in.
+ */
+class LensRing(private val dens: Float) {
+    private val node = RenderNode("lensRing")
+    private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Color.argb(70, 255, 255, 255) }
+    private val level = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = Color.WHITE }
+
+    /** [w] x [h] is the whole rear screen; [lensY] the lens centre's share of its height. */
+    fun draw(c: Canvas, w: Float, h: Float, lensY: Float, shown: Float, frac: Float) {
+        if (shown <= 0f || !c.isHardwareAccelerated) return
         val cx = w * LENS_X
-        val cy = h * LENS_Y
+        val cy = h * lensY
         val lens = h * LENS_R
         val stroke = STROKE_DP * dens
         // Out of the lens: from under its edge to a gap beside it.
@@ -108,19 +129,16 @@ class VolumeRing(private val view: View) {
     }
 
     companion object {
-        private const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
-        private const val EXTRA_STREAM = "android.media.EXTRA_VOLUME_STREAM_TYPE"
         // The top lens on the rear screen, measured off the rear wallpaper picker's preview
         // (the card 1043 px wide there): centre (147.8, 146.5), radius 128.7 of 904 x 572.
         const val LENS_X = 147.8f / 904f
-        const val LENS_Y = 146.5f / 572f
+        const val TOP_Y = 146.5f / 572f
+        // shortcut: the lower lens taken as the top one mirrored about the middle; measure it
+        // off the same preview if the ring sits off it.
+        const val BOTTOM_Y = 1f - TOP_Y
         const val LENS_R = 128.7f / 572f
+        const val BLUR_DP = 10f
         private const val STROKE_DP = 3f
         private const val GAP_DP = 0f
-        private const val BLUR_DP = 10f
-        private const val SHOW_MS = 320L
-        private const val HIDE_MS = 420L
-        private const val HOLD_MS = 1600L
-        private const val SLIDE_MS = 180L
     }
 }

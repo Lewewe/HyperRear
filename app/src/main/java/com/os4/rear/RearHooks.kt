@@ -92,7 +92,7 @@ class RearHooks : XposedModule() {
                 RearCardView(context, {
                     runCatching { gestureOf(context)?.let { g -> intercept.setBoolean(g, true) } }
                         .onFailure { log(Log.WARN, TAG, "double tap not held", it) }
-                }, { RearSettings.volumeRing(settings) })
+                }, { RearSettings.volumeRing(settings) }, { RearSettings.progressRing(settings) })
             } ?: native
         }
         // The notification card's K(view) passes its Bundle to the MAML view whenever the data

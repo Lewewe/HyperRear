@@ -340,12 +340,13 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         if (lt > 0f && lyricsWanted) {
             flow.sizeScale = LYRICS_SCALE
             // It grows out of the middle as the cover row leaves, and sinks back as it returns.
+            // From the panel's top edge, so the rows under the sung line stay above the bar; with
+            // the bar gone to the ring, down to just above the controls.
+            val bottom = if (progressRing) h * CONTROLS_Y - h * 0.15f / 2f - h * 0.03f else h * BAR_Y - h * 0.04f
             c.save()
             val k = 1f - LYRICS_SHRINK * (1f - lt)
-            c.scale(k, k, w / 2f, h * BAR_Y / 2f)
-            // From the panel's top edge, so the rows under the sung line stay above the bar.
+            c.scale(k, k, w / 2f, bottom / 2f)
             // A line half past the bottom edge fades out over the last rows instead of being cut flat.
-            val bottom = h * BAR_Y - h * 0.04f
             val faded = c.saveLayer(0f, 0f, w, bottom, null)
             if (flow.draw(c, margin, 0f, w - margin - box * 1.4f, bottom, lt)) invalidate()
             val fadeTop = bottom - h * LYRICS_FADE
@@ -362,7 +363,22 @@ class RearPlayer(private val context: android.content.Context, private val dens:
 
         val barLeft = margin
         val barW = w - 2f * margin
-        drawProgress(c, barLeft, barW, h * BAR_Y, h, if (cur != null || out != null) 1f else 0f)
+        val barAlpha = if (cur != null || out != null) 1f else 0f
+        // With the progress ring on, opening the lyric fades and blurs the bar out, then the ring
+        // comes out of the lower camera; closing it runs the other way.
+        val barShown = if (progressRing) 1f - (lt * 2f).coerceIn(0f, 1f) else 1f
+        ringShown = if (progressRing) (lt * 2f - 1f).coerceIn(0f, 1f) else 0f
+        if (barShown >= 1f || !c.isHardwareAccelerated) drawProgress(c, barLeft, barW, h * BAR_Y, h, barAlpha * barShown)
+        else if (barShown <= 0f) bar.setEmpty()
+        else {
+            val blur = LensRing.BLUR_DP * dens * (1f - barShown)
+            barNode.setPosition(0, 0, w.toInt(), h.toInt())
+            barNode.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.DECAL))
+            barNode.alpha = barShown
+            val rc = barNode.beginRecording()
+            try { drawProgress(rc, barLeft, barW, h * BAR_Y, h, barAlpha) } finally { barNode.endRecording() }
+            c.drawRenderNode(barNode)
+        }
         drawControls(c, barLeft, barW, h * CONTROLS_Y, h)
     }
 
@@ -661,6 +677,20 @@ class RearPlayer(private val context: android.content.Context, private val dens:
     private val glideEase = PathInterpolator(0.2f, 0f, 0f, 1f)
     private var lastDuration = 0L
     private var lastDurationAt = 0L
+
+    /** HyperRear's progress ring setting, set by the card when it is shown. */
+    var progressRing = false
+    /** How far out of the lower camera the progress ring is, for the card to draw. */
+    var ringShown = 0f
+        private set
+    private val barNode = android.graphics.RenderNode("bar")
+
+    /** Where the track is, for the ring: the bar's own place when it has one. */
+    fun progressNow(): Float {
+        if (!barF.isNaN()) return barF
+        val d = RearMedia.duration
+        return if (d > 0L) (RearMedia.positionNow().toFloat() / d).coerceIn(0f, 1f) else 0f
+    }
 
     private fun drawProgress(c: Canvas, left: Float, width: Float, y: Float, h: Float, alpha: Float) {
         val now = SystemClock.uptimeMillis()

@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  * HyperRear has no screen of its own: HyperMusicCover-Enhanced's Extensions page reads and sets it
  * through [call], as it does its other extensions. Only HMC-E, signed like this app, is answered.
  * - `query`: its state, see [state].
- * - `configure`: any of [RearSettings.ENABLED], [RearSettings.VOLUME_RING]; returns the state.
+ * - `configure`: any of [RearSettings.ENABLED], [RearSettings.VOLUME_RING], [RearSettings.PROGRESS_RING]; returns the state.
  * - `requestScopes`: asks LSPosed for the rear launcher.
  */
 class Bridge : ContentProvider() {
@@ -37,7 +37,7 @@ class Bridge : ContentProvider() {
         when (method) {
             "configure" -> extras?.let { e ->
                 ScopeRequester.settings()?.edit()?.apply {
-                    for (key in listOf(RearSettings.ENABLED, RearSettings.VOLUME_RING)) {
+                    for (key in listOf(RearSettings.ENABLED, RearSettings.VOLUME_RING, RearSettings.PROGRESS_RING)) {
                         if (e.containsKey(key)) putBoolean(key, e.getBoolean(key))
                     }
                 }?.commit()
@@ -77,6 +77,7 @@ class Bridge : ContentProvider() {
         val settings = ScopeRequester.settings()
         putBoolean(RearSettings.ENABLED, RearSettings.enabled(settings))
         putBoolean(RearSettings.VOLUME_RING, RearSettings.volumeRing(settings))
+        putBoolean(RearSettings.PROGRESS_RING, RearSettings.progressRing(settings))
     }
 
     override fun query(u: Uri, p: Array<String>?, s: String?, a: Array<String>?, o: String?) = null

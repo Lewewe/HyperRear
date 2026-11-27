@@ -26,17 +26,21 @@ class RearCardView(
     private val interceptDoubleClick: () -> Unit = {},
     /** Read each time the card is shown: HyperRear's volume ring setting. */
     private val volumeRing: () -> Boolean = { true },
+    /** Read each time the card is shown: HyperRear's progress ring setting. */
+    private val progressRing: () -> Boolean = { true },
 ) : View(context) {
     private val dens = resources.displayMetrics.density
     private val player = RearPlayer(context, dens) { invalidate() }
     private val onMedia: () -> Unit = { player.sync(); backdrop(); invalidate() }
     private val volume = VolumeRing(this)
+    private val progress = LensRing(dens)
     private val onHmc: () -> Unit = { backdrop(); invalidate() }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         RearMedia.addListener(onMedia)
         if (volumeRing()) volume.attach()
+        player.progressRing = progressRing()
         HmcBackdrop.addListener(onHmc)
         Spectrum.start(context)
         post { takeClock() }
@@ -191,6 +195,7 @@ class RearCardView(
         player.draw(c, w - left, h, w)
         c.restore()
         volume.draw(c, w, h)
+        progress.draw(c, w, h, LensRing.BOTTOM_Y, player.ringShown, player.progressNow())
         // The bar and its times move on their own while playing.
         removeCallbacks(tick)
         if (RearMedia.running) postDelayed(tick, TICK_MS)

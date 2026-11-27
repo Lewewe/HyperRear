@@ -12,6 +12,8 @@ object RearSettings {
     /** Our card in place of the native music card. */
     const val ENABLED = "enabled"
     const val VOLUME_RING = "volumeRing"
+    /** With the lyric open, the progress bar moves to a ring round the lower camera. */
+    const val PROGRESS_RING = "progressRing"
 
     /** The rear launcher answers this ordered broadcast while [RearHooks] is loaded there. */
     const val PING = "com.os4.rear.PING"
@@ -21,6 +23,7 @@ object RearSettings {
 
     fun enabled(p: SharedPreferences?) = p?.getBoolean(ENABLED, true) ?: true
     fun volumeRing(p: SharedPreferences?) = p?.getBoolean(VOLUME_RING, true) ?: true
+    fun progressRing(p: SharedPreferences?) = p?.getBoolean(PROGRESS_RING, true) ?: true
 }
 
 class RearApp : Application() {
