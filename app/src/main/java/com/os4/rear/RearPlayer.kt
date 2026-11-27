@@ -314,11 +314,10 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         val box = h * VIS_W
         val layer = if (lt > 0f) c.saveLayerAlpha(0f, 0f, w, h * BAR_Y - h * 0.04f, (255 * (1f - lt)).toInt()) else -1
         if (lt < 1f) {
-            // Opening the lyric, the cover row shrinks back and drifts up as it fades.
+            // Opening the lyric, the cover row sinks into the middle of the panel as it fades.
             c.save()
-            c.translate(0f, -h * LYRICS_DRIFT * lt)
             val k = 1f - LYRICS_SHRINK * lt
-            c.scale(k, k, margin, cy)
+            c.scale(k, k, w / 2f, cy)
             drawCover(c, side, radius, scale, out, cur, inT, cx, cy)
             val textLeft = margin + side + h * 0.055f
             val textW = w - textLeft - margin - (if (Spectrum.connected || lyricsBtn > 0f) box * 1.3f else 0f)
@@ -335,9 +334,10 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         drawLyricsButton(c, sideX, cy + h * 0.065f, box * LYRICS_SIDE)
         if (lt > 0f && lyricsWanted) {
             flow.sizeScale = LYRICS_SCALE
-            // It rises into place as the cover row leaves, and sinks away as it comes back.
+            // It grows out of the middle as the cover row leaves, and sinks back as it returns.
             c.save()
-            c.translate(0f, h * LYRICS_RISE * (1f - lt))
+            val k = 1f - LYRICS_SHRINK * (1f - lt)
+            c.scale(k, k, w / 2f, h * BAR_Y / 2f)
             // From the panel's top edge, so the rows under the sung line stay above the bar.
             if (flow.draw(c, margin, 0f, w - margin - box * 1.4f, h * BAR_Y - h * 0.05f, lt)) invalidate()
             c.restore()
@@ -803,9 +803,7 @@ class RearPlayer(private val context: android.content.Context, private val dens:
         const val BAR_LIFT = 0.45f
         /** HMC-E's lyric size scaled down for the rear's small panel. */
         const val LYRICS_SCALE = 0.45f
-        /** Opening the lyric: the cover row's shrink and upward drift, the lyric's rise (of the height). */
+        /** Opening the lyric: how far the cover row sinks into the middle and the lyric grows out of it. */
         const val LYRICS_SHRINK = 0.08f
-        const val LYRICS_DRIFT = 0.04f
-        const val LYRICS_RISE = 0.08f
     }
 }
